@@ -163,3 +163,7 @@ infographic/
 fractal_output/*
 !fractal_output/demo/
 !fractal_output/demo/**
+
+# FenXing: README screenshots live under docs/images (negate the generic images/ rule above)
+!docs/images/
+!docs/images/**
