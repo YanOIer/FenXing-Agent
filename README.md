@@ -30,6 +30,10 @@
 
 ![分形图 · 下钻子图](docs/images/fractal-drill.png)
 
+**真实任务实拍（非合成演示）：`kimi-for-coding` 模型一次双委派，⊕分形×2，两个子 Agent 轨迹均已捕获挂载（`fractal/real_check.py` 可复现）**
+
+![分形图 · 真实委派任务](docs/images/fractal-real.png)
+
 ## 特性
 
 - 🌱 **源点 → 终点的硬保证**：每张图有且仅有一个入度为 0 的问题节点、一个出度为 0 的答案节点，全图双向可达（有自动化断言兜底）。
@@ -64,14 +68,18 @@ python fenxing.py --demo
    ```bash
    # ~/.hermes/.env —— 只放密钥
    OPENROUTER_API_KEY=sk-or-...
+
+   # 或者用 Kimi（注意：BASE_URL 必须包含 /v1 段）
+   KIMI_API_KEY=sk-kimi-...
+   KIMI_BASE_URL=https://api.kimi.com/coding/v1
    ```
 
 3. 启动：
 
    ```bash
    python fenxing.py                    # 交互问答，每轮自动产图
+   python fenxing.py --model kimi-for-coding --toolsets delegation
    python fenxing.py --model anthropic/claude-sonnet-4.6
-   python fenxing.py --toolsets web,terminal
    ```
 
 REPL 内命令：
@@ -130,7 +138,7 @@ fractal_output/    # 生成的分形图（demo/ 为演示产物）
 - [x] 消息流 → 分形图（链 / 网 / workflow）
 - [x] 子 Agent 轨迹递归挂载 + 双击下钻 + 面包屑
 - [x] 后台异步委派的 pending 态与 `/graph` 刷新
-- [ ] 真实环境端到端实测（需完整 hermes 依赖与 API Key）
+- [x] 真实环境端到端实测（`fractal/real_check.py`：Kimi 网关双委派，recorder 挂载真实 AIAgent，2 子图捕获，2026-07-18 通过）
 - [ ] 时间轴播放：按真实发生顺序逐节点点亮推理路径
 - [ ] 更多委派形态（orchestrator 扇出）的并行视图优化
 - [ ] 与 hermes TUI / Gateway 的深度集成
