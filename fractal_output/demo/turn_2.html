@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>演示 2 · 对比 Python 3.13 和 3.1</title>
+<style>
+  :root {
+    --paper: #faf9f6;
+    --ink: #1c1917;
+    --ink-2: #57534e;
+    --ink-3: #a8a29e;
+    --line: #e7e5e4;
+    --card: #ffffff;
+    --accent: #4f46e5;
+    --edge: #a8a29e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+                 "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+  #app { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+
+  /* ---------- 顶部工具栏 ---------- */
+  #toolbar {
+    flex: 0 0 54px;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+  }
+  .logo { font-size: 15px; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
+  .logo .fx { color: var(--accent); }
+  #traceTitle {
+    font-size: 13px; color: var(--ink-2);
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border-left: 1px solid var(--line); padding-left: 16px;
+  }
+  #metaChips { display: flex; gap: 8px; flex: 1; overflow: hidden; }
+  .chip {
+    font-size: 11.5px; color: var(--ink-2);
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+  #toolbar .actions { display: flex; gap: 8px; }
+  button {
+    font: inherit; font-size: 12.5px; color: var(--ink);
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--ink-3); background: #f5f4f1; }
+  button.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- 面包屑（分形钻取） ---------- */
+  #breadcrumb {
+    display: none; align-items: center; gap: 4px;
+    padding: 5px 16px;
+    background: #f5f4f1; border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-2); z-index: 9;
+  }
+  #breadcrumb.show { display: flex; }
+  #breadcrumb .crumb { cursor: pointer; padding: 2px 8px; border-radius: 6px; }
+  #breadcrumb .crumb:hover { background: #eceae6; color: var(--ink); }
+  #breadcrumb .crumb.current {
+    color: var(--ink); font-weight: 600; cursor: default;
+    background: #fff; border: 1px solid var(--line);
+  }
+  #breadcrumb .crumb.current:hover { background: #fff; }
+  #breadcrumb .sep { color: var(--ink-3); }
+
+  /* ---------- 主区域 ---------- */
+  #stage { flex: 1; display: flex; min-height: 0; position: relative; }
+  #canvas { flex: 1; display: block; cursor: grab; }
+  #canvas.panning { cursor: grabbing; }
+
+  .edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+  .edge.dashed { stroke-dasharray: 6 4; }
+  .edge.hl { stroke: var(--accent); stroke-width: 2.4; }
+
+  .node { cursor: pointer; }
+  .node rect.body { fill: #ffffff; stroke-width: 1.6; }
+  .node text { user-select: none; }
+  .node .label { font-size: 13px; font-weight: 600; fill: var(--ink); }
+  .node .sub { font-size: 10.5px; fill: var(--ink-2); }
+  .node.hl rect.body { stroke: var(--accent) !important; stroke-width: 3; }
+  .node.selected rect.body { filter: drop-shadow(0 2px 6px rgba(28,25,23,.18)); }
+  .glyph { font-size: 11px; font-weight: 700; fill: #fff; }
+  .badge { font-weight: 700; }
+
+  /* ---------- 详情面板 ---------- */
+  #detail {
+    flex: 0 0 380px;
+    background: var(--card);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  #detailHead {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  #detailHead .kind-badge {
+    font-size: 11px; font-weight: 700; color: #fff;
+    border-radius: 6px; padding: 3px 8px; white-space: nowrap;
+  }
+  #detailHead .d-title {
+    flex: 1; font-size: 13.5px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #detailClose { border: none; background: none; font-size: 16px; color: var(--ink-3); padding: 2px 6px; }
+  #detailClose:hover { color: var(--ink); background: none; }
+  #detailBody { flex: 1; overflow-y: auto; padding: 14px; }
+  .d-meta { margin-bottom: 12px; }
+  .d-meta .row { display: flex; font-size: 12px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .d-meta .row .k { flex: 0 0 88px; color: var(--ink-2); }
+  .d-meta .row .v { flex: 1; word-break: break-all; }
+  .d-content {
+    font-size: 12.8px; line-height: 1.65;
+    white-space: pre-wrap; word-break: break-word;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .d-hint { margin-top: 10px; font-size: 11.5px; color: var(--ink-2); }
+  .d-kids { margin-top: 6px; font-size: 12px; color: var(--ink); }
+  .d-kids li { margin: 3px 0 3px 18px; }
+  .d-empty { color: var(--ink-3); font-size: 13px; padding: 24px 8px; text-align: center; }
+
+  /* ---------- Toast ---------- */
+  #toast {
+    position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px);
+    background: var(--ink); color: #fafaf9; font-size: 13px;
+    border-radius: 10px; padding: 10px 18px;
+    opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+    z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.18); max-width: 70vw;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="toolbar">
+    <span class="logo">分形<span class="fx">Agent</span></span>
+    <span id="traceTitle"></span>
+    <div id="metaChips"></div>
+    <div class="actions">
+      <button id="btnToggleReasoning"></button>
+      <button id="btnReset">重置视图</button>
+    </div>
+  </header>
+  <nav id="breadcrumb"></nav>
+  <main id="stage">
+    <svg id="canvas">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e"></path>
+        </marker>
+        <marker id="arrowHl" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5"></path>
+        </marker>
+        <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+          <circle cx="1.4" cy="1.4" r="1.4" fill="#e6e4df"></circle>
+        </pattern>
+      </defs>
+      <g id="viewport">
+        <rect id="bgDots" x="-8000" y="-8000" width="16000" height="16000" fill="url(#dots)"></rect>
+        <g id="edgeLayer"></g>
+        <g id="nodeLayer"></g>
+      </g>
+    </svg>
+    <aside id="detail">
+      <div id="detailHead">
+        <span class="kind-badge" id="dBadge">节点</span>
+        <span class="d-title" id="dTitle">详情</span>
+        <button id="detailClose" title="关闭">×</button>
+      </div>
+      <div id="detailBody"><div class="d-empty">点击图中的节点查看完整内容</div></div>
+    </aside>
+    <div id="toast"></div>
+  </main>
+</div>
+<script>
+"use strict";
+const TRACE = {"id": "turn_2", "question": "对比 Python 3.13 和 3.12 的性能，顺便查一下官方基准数据", "answer": "结论：Python 3.13 相对 3.12 在官方 pyperformance 套件上几何平均快约 5%，本地复测 +5.9%，合并口径 1.054x，数字可信。\n\n要点：\n1. 提升主要来自 specializing adaptive 解释器；数值类子项最明显（scimark_fft +12%，nbody +9%，raytrace +7%），regex_dna 基本持平。\n2. free-threaded（no-GIL，PEP 703）构建默认关闭：多线程 CPU 密集任务接近线性加速（4 线程约 3.2x），但单线程回退约 8%，且不少 C 扩展尚未兼容。\n3. 实验性 JIT 在纯 Python 数值循环上 +2~9%，仍不建议生产开启。\n\n建议：常规服务直接用默认构建的 3.13 即可获得约 5% 的免费提速；若吃满多核 CPU 且依赖纯 Python，可评估 free-threaded 构建。", "created_at": "2026-07-18T14:17:44+08:00", "meta": {"model": "demo-synthetic", "api_calls": 3, "duration_s": 14.6}, "nodes": [{"id": "n0", "kind": "question", "label": "问题", "summary": "对比 Python 3.13 和 3.12 的性能，顺便查一下官方基准数据", "content": "对比 Python 3.13 和 3.12 的性能，顺便查一下官方基准数据", "meta": {}, "expandable": false}, {"id": "n1", "kind": "reasoning", "label": "推理", "summary": "这是一个事实型对比问题，需要查证。策略：并行发起三个查询——(1) 英文资料：pyperformance 官方基准里 3.13 vs 3.12 的几何平均；(2) 中文资料：3.13 的 free-threading(no-GIL) 与实验…", "content": "这是一个事实型对比问题，需要查证。策略：并行发起三个查询——(1) 英文资料：pyperformance 官方基准里 3.13 vs 3.12 的几何平均；(2) 中文资料：3.13 的 free-threading(no-GIL) 与实验性 JIT 对性能的实际影响；(3) 本地笔记 notes/py_bench.md 里之前跑过的数据。三路互不依赖，应该一次性并行发出，等结果齐后再综合。", "meta": {"chars": 197}, "expandable": false}, {"id": "n2", "kind": "thought", "label": "想法", "summary": "我打算并行做三件事：搜两路资料（官方基准 + no-GIL/JIT 影响），同时读一下本地的基准笔记，然后再汇总。", "content": "我打算并行做三件事：搜两路资料（官方基准 + no-GIL/JIT 影响），同时读一下本地的基准笔记，然后再汇总。", "meta": {"chars": 57}, "expandable": false}, {"id": "n3", "kind": "tool_call", "label": "web_search", "summary": "web_search(…)  {\"query\": \"Python 3.13 vs 3.12 pyperformance geometric mean\"}", "content": "web_search({\"query\": \"Python 3.13 vs 3.12 pyperformance geometric mean\"})", "meta": {"arguments": {"query": "Python 3.13 vs 3.12 pyperformance geometric mean"}, "tool_call_id": "call_ws1"}, "expandable": true}, {"id": "n4", "kind": "tool_call", "label": "web_search", "summary": "web_search(…)  {\"query\": \"Python 3.13 free-threading JIT 基准 影响\"}", "content": "web_search({\"query\": \"Python 3.13 free-threading JIT 基准 影响\"})", "meta": {"arguments": {"query": "Python 3.13 free-threading JIT 基准 影响"}, "tool_call_id": "call_ws2"}, "expandable": true}, {"id": "n5", "kind": "tool_call", "label": "read_file", "summary": "read_file(…)  {\"path\": \"notes/py_bench.md\"}", "content": "read_file({\"path\": \"notes/py_bench.md\"})", "meta": {"arguments": {"path": "notes/py_bench.md"}, "tool_call_id": "call_rf1"}, "expandable": true}, {"id": "n6", "kind": "tool_result", "label": "web_search 结果", "summary": "搜索结果（web_search · query=\"Python 3.13 vs 3.12 pyperformance geometric mean\"）： 1. Python 3.13.0 final 发布说明（docs.python.org…", "content": "搜索结果（web_search · query=\"Python 3.13 vs 3.12 pyperformance geometric mean\"）：\n1. Python 3.13.0 final 发布说明（docs.python.org/whatsnew/3.13.html）——官方称 CPython 3.13 在 pyperformance 套件上相对 3.12 几何平均提升约 5%，其中 specializing adaptive interpreter (PEP 659 的延续) 贡献了主要部分；实验性 free-threaded 构建 (PEP 703) 默认关闭，单线程性能约回退 5–10%。\n2. pyperformance 官方跑分页（pyperformance.readthedocs.io）——3.13.0 vs 3.12.x：geometric_mean ≈ 1.05x；细分：nbody +9%，raytrace +7%，scimark_fft +12%，regex_dna 持平，json_loads +2%。\n3. Faster CPython 团队博客——提到 3.13 的 Tier-1 解释器 micro-op 化基本完成，为 3.14 的 Tier-2 JIT 铺路；实验性 JIT (--enable-experimental-jit) 在部分基准上有 2–9% 提升，但不稳定。\n4. 第三方复测（towardsdatascience 博文）——Docker python:3.13 vs 3.12，fib(35) 递归耗时 3.13 快约 6%；asyncio 场景差异在噪声范围内。\n（结果 5–8 略去：多为转载与版本号勘误）", "meta": {"status": "ok", "tool_call_id": "call_ws1", "chars": 741}, "expandable": false}, {"id": "n7", "kind": "tool_result", "label": "web_search 结果", "summary": "搜索结果（web_search · query=\"Python 3.13 free-threading JIT 基准 影响\"）： 1. 知乎专栏《Python 3.13 性能实测》——free-threaded 构建下多线程 CPU 密集任…", "content": "搜索结果（web_search · query=\"Python 3.13 free-threading JIT 基准 影响\"）：\n1. 知乎专栏《Python 3.13 性能实测》——free-threaded 构建下多线程 CPU 密集任务（4 线程矩阵乘）相对 GIL 版提升约 3.2x（接近线性），但单线程回退约 8%；作者提醒 no-GIL 构建与大量 C 扩展尚不兼容。\n2. CPython 核心开发者访谈（podcast 文字稿）——PEP 703 的 bias-refcounting 是单线程回退的主要来源；3.14 计划引入 deferred refcounting 把回退压到 <2%。\n3. Real Python 评测——实验性 JIT 在纯 Python 数值循环上最高 +9%，在 I/O 密集服务里无感知；建议生产环境继续用默认构建。\n4. 基准方法论提醒（LWN 评论）——pyperformance 各子项方差大，应报告几何平均而非算术平均，且要固定 CPU 调频。\n（结果 5–10 略去）", "meta": {"status": "ok", "tool_call_id": "call_ws2", "chars": 465}, "expandable": false}, {"id": "n8", "kind": "tool_result", "label": "read_file 结果", "summary": "notes/py_bench.md（本地笔记，read_file 返回）： # 本机 pyperformance 复测记录（2024-11，i7-12700H，平衡电源模式） - 环境：python3.12.7 / python3.13.0…", "content": "notes/py_bench.md（本地笔记，read_file 返回）：\n# 本机 pyperformance 复测记录（2024-11，i7-12700H，平衡电源模式）\n- 环境：python3.12.7 / python3.13.0，均为 python.org 官方安装包\n- 命令：pyperformance run -b nbody,raytrace,scimark,regex_dna,json_loads\n- 结果（三次取中位数）：\n  - nbody:        3.12=412ms  3.13=379ms  (+8.7%)\n  - raytrace:     3.12=689ms  3.13=641ms  (+7.5%)\n  - scimark_fft:  3.12=301ms  3.13=268ms  (+12.3%)\n  - regex_dna:    3.12=176ms  3.13=177ms  (-0.6%，噪声内)\n  - json_loads:   3.12=28.9us 3.13=28.2us (+2.4%)\n- 备注：本机几何平均约 +5.9%，与官方公布的 ~5% 一致；free-threaded 构建单线程 fib(32) 慢 8.4%，与公开数据吻合。", "meta": {"status": "ok", "tool_call_id": "call_rf1", "chars": 556}, "expandable": false}, {"id": "n9", "kind": "reasoning", "label": "推理", "summary": "三路数据已经齐了，且互相印证：官方 ~5%、本机笔记 +5.9%、第三方 +6%。为了给用户一个确定数字，我想用一个本地小脚本把官方子项与本机子项合并算一个几何平均，并检查口径（几何平均 vs 算术平均）是否一致。注意：这里只是汇总已有数字…", "content": "三路数据已经齐了，且互相印证：官方 ~5%、本机笔记 +5.9%、第三方 +6%。为了给用户一个确定数字，我想用一个本地小脚本把官方子项与本机子项合并算一个几何平均，并检查口径（几何平均 vs 算术平均）是否一致。注意：这里只是汇总已有数字，不需要再搜新资料。", "meta": {"chars": 130}, "expandable": false}, {"id": "n10", "kind": "thought", "label": "想法", "summary": "资料齐了。跑个本地小脚本把官方与本机的子项数据合并，算几何平均验证口径。", "content": "资料齐了。跑个本地小脚本把官方与本机的子项数据合并，算几何平均验证口径。", "meta": {"chars": 36}, "expandable": false}, {"id": "n11", "kind": "tool_call", "label": "terminal", "summary": "terminal(…)  {\"command\": \"python scripts/bench_summary.py --compare 3.12 3.13\"}", "content": "terminal({\"command\": \"python scripts/bench_summary.py --compare 3.12 3.13\"})", "meta": {"arguments": {"command": "python scripts/bench_summary.py --compare 3.12 3.13"}, "tool_call_id": "call_t1"}, "expandable": true}, {"id": "n12", "kind": "tool_result", "label": "terminal 结果", "summary": "$ python scripts/bench_summary.py --compare 3.12 3.13 merged 10 benchmark rows (official=5, local=5) geometric_mean_spee…", "content": "$ python scripts/bench_summary.py --compare 3.12 3.13\nmerged 10 benchmark rows (official=5, local=5)\ngeometric_mean_speedup: 1.054x  (official 1.050x, local 1.059x)\nmin: regex_dna 0.994x | max: scimark_fft 1.123x\nnote: free-threaded build single-thread penalty ≈ 8% (excluded from mean)\nexit code: 0", "meta": {"status": "ok", "tool_call_id": "call_t1", "chars": 299}, "expandable": false}, {"id": "n13", "kind": "answer", "label": "答案", "summary": "结论：Python 3.13 相对 3.12 在官方 pyperformance 套件上几何平均快约 5%，本地复测 +5.9%，合并口径 1.054x，数字可信。 要点： 1. 提升主要来自 specializing adaptive 解…", "content": "结论：Python 3.13 相对 3.12 在官方 pyperformance 套件上几何平均快约 5%，本地复测 +5.9%，合并口径 1.054x，数字可信。\n\n要点：\n1. 提升主要来自 specializing adaptive 解释器；数值类子项最明显（scimark_fft +12%，nbody +9%，raytrace +7%），regex_dna 基本持平。\n2. free-threaded（no-GIL，PEP 703）构建默认关闭：多线程 CPU 密集任务接近线性加速（4 线程约 3.2x），但单线程回退约 8%，且不少 C 扩展尚未兼容。\n3. 实验性 JIT 在纯 Python 数值循环上 +2~9%，仍不建议生产开启。\n\n建议：常规服务直接用默认构建的 3.13 即可获得约 5% 的免费提速；若吃满多核 CPU 且依赖纯 Python，可评估 free-threaded 构建。", "meta": {}, "expandable": false}], "edges": [{"source": "n0", "target": "n1", "kind": "flow"}, {"source": "n1", "target": "n2", "kind": "flow"}, {"source": "n2", "target": "n3", "kind": "branch"}, {"source": "n2", "target": "n4", "kind": "branch"}, {"source": "n2", "target": "n5", "kind": "branch"}, {"source": "n3", "target": "n6", "kind": "flow"}, {"source": "n4", "target": "n7", "kind": "flow"}, {"source": "n5", "target": "n8", "kind": "flow"}, {"source": "n6", "target": "n9", "kind": "merge"}, {"source": "n7", "target": "n9", "kind": "merge"}, {"source": "n8", "target": "n9", "kind": "merge"}, {"source": "n9", "target": "n10", "kind": "flow"}, {"source": "n10", "target": "n11", "kind": "flow"}, {"source": "n11", "target": "n12", "kind": "flow"}, {"source": "n12", "target": "n13", "kind": "flow"}]};
+const PAGE_TITLE = "演示 2 · 对比 Python 3.13 和 3.1";
+
+const KIND_COLORS = {
+  question: "#3730a3",   // 深靛蓝
+  reasoning: "#6d28d9",  // 紫
+  thought: "#0e7490",    // 青
+  tool_call: "#b45309",  // 琥珀
+  tool_result: "#15803d",// 绿（error 时覆盖为红）
+  answer: "#166534"      // 深绿
+};
+const KIND_NAMES = {
+  question: "问题", reasoning: "推理", thought: "想法",
+  tool_call: "工具调用", tool_result: "工具结果", answer: "答案"
+};
+const KIND_GLYPH = {
+  question: "问", reasoning: "推", thought: "想",
+  tool_call: "具", tool_result: "果", answer: "答"
+};
+const NODE_W = 176, NODE_H = 58, X_GAP = 250, Y_GAP = 104, X0 = 80, Y0 = 90;
+const NS = "http://www.w3.org/2000/svg";
+
+const svg = document.getElementById("canvas");
+const viewport = document.getElementById("viewport");
+const edgeLayer = document.getElementById("edgeLayer");
+const nodeLayer = document.getElementById("nodeLayer");
+const detailBody = document.getElementById("detailBody");
+const dBadge = document.getElementById("dBadge");
+const dTitle = document.getElementById("dTitle");
+const toastEl = document.getElementById("toast");
+const btnToggle = document.getElementById("btnToggleReasoning");
+
+let collapseReasoning = false;
+let nodeMap = new Map();          // 当前视图可见节点 id -> node(带 x/y)
+let edgeViews = [];               // 当前视图可见边 [{el, source, target}]
+let nodeViews = new Map();        // id -> <g>
+let currentEdges = [];            // 当前视图的边（供祖先高亮）
+let selectedId = null;
+
+/* 分形视图栈：根图 + 逐级下钻的子图 */
+let viewStack = [{
+  nodes: TRACE.nodes, edges: TRACE.edges,
+  crumb: "根图", question: TRACE.question || ""
+}];
+function currentView() { return viewStack[viewStack.length - 1]; }
+
+function colorOf(n) {
+  if (n.kind === "tool_result" && n.meta && n.meta.status === "error") return "#b91c1c";
+  return KIND_COLORS[n.kind] || "#57534e";
+}
+function truncate(s, n) {
+  s = (s || "").replace(/\s+/g, " ").trim();
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+function el(name, attrs, parent) {
+  const e = document.createElementNS(NS, name);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------- 可见图（收起推理节点时做传递重连） ---------- */
+function visibleGraph() {
+  const view = currentView();
+  if (!collapseReasoning) return { nodes: view.nodes.slice(), edges: view.edges.slice() };
+  const hidden = new Set(view.nodes.filter(n => n.kind === "reasoning").map(n => n.id));
+  const nodes = view.nodes.filter(n => !hidden.has(n.id));
+  const visible = new Set(nodes.map(n => n.id));
+  const out = new Map();
+  view.edges.forEach(e => {
+    if (!out.has(e.source)) out.set(e.source, []);
+    out.get(e.source).push(e);
+  });
+  const seen = new Set();
+  const edges = [];
+  for (const n of nodes) {
+    const stack = [n.id];
+    const visited = new Set([n.id]);
+    while (stack.length) {
+      const cur = stack.pop();
+      for (const e of (out.get(cur) || [])) {
+        if (hidden.has(e.target)) {
+          if (!visited.has(e.target)) { visited.add(e.target); stack.push(e.target); }
+        } else if (visible.has(e.target)) {
+          const key = n.id + "→" + e.target;
+          if (!seen.has(key)) { seen.add(key); edges.push({ source: n.id, target: e.target, kind: e.kind }); }
+        }
+      }
+    }
+  }
+  return { nodes, edges };
+}
+
+/* ---------- 分层 DAG 布局：层 = 从源点出发的最长路径深度 ---------- */
+function layout(g) {
+  const byId = new Map(g.nodes.map(n => [n.id, n]));
+  const adj = new Map(g.nodes.map(n => [n.id, []]));
+  const indeg = new Map(g.nodes.map(n => [n.id, 0]));
+  g.edges.forEach(e => {
+    if (byId.has(e.source) && byId.has(e.target)) {
+      adj.get(e.source).push(e.target);
+      indeg.set(e.target, indeg.get(e.target) + 1);
+    }
+  });
+  const depth = new Map();
+  const queue = g.nodes.filter(n => indeg.get(n.id) === 0).map(n => n.id);
+  queue.forEach(id => depth.set(id, 0));
+  while (queue.length) {
+    const id = queue.shift();
+    for (const t of adj.get(id)) {
+      depth.set(t, Math.max(depth.get(t) || 0, (depth.get(id) || 0) + 1));
+      indeg.set(t, indeg.get(t) - 1);
+      if (indeg.get(t) === 0) queue.push(t);
+    }
+  }
+  const layers = new Map();
+  g.nodes.forEach(n => {
+    const d = depth.get(n.id) || 0;
+    if (!layers.has(d)) layers.set(d, []);
+    layers.get(d).push(n);
+  });
+  const maxSize = Math.max.apply(null, Array.from(layers.values()).map(l => l.length));
+  layers.forEach((list, d) => {
+    list.forEach((n, i) => {
+      n.x = X0 + d * X_GAP;
+      n.y = Y0 + i * Y_GAP + (maxSize - list.length) * Y_GAP / 2;
+    });
+  });
+}
+
+/* ---------- 绘制 ---------- */
+function drawEdge(e) {
+  const s = nodeMap.get(e.source), t = nodeMap.get(e.target);
+  if (!s || !t) return;
+  const x1 = s.x + NODE_W, y1 = s.y + NODE_H / 2;
+  const x2 = t.x, y2 = t.y + NODE_H / 2;
+  const dx = Math.max(48, (x2 - x1) / 2);
+  const p = el("path", {
+    "class": "edge" + (e.kind === "branch" || e.kind === "merge" ? " dashed" : ""),
+    "d": `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`,
+    "marker-end": "url(#arrow)"
+  }, edgeLayer);
+  edgeViews.push({ el: p, source: e.source, target: e.target });
+}
+
+function subLine(n) {
+  if (n.kind === "question") return "起点";
+  if (n.kind === "answer") return "终点";
+  if (n.kind === "tool_call") {
+    if (n.children && n.children.length) return "委派 · " + n.children.length + " 个子任务";
+    if (n.meta && n.meta.pending) return "委派 · 子任务运行中";
+    return "工具调用 · 可展开";
+  }
+  if (n.kind === "tool_result") {
+    const err = n.meta && n.meta.status === "error";
+    return "工具结果 · " + (err ? "失败" : "成功");
+  }
+  return KIND_NAMES[n.kind] || n.kind;
+}
+
+function badgeWidth(txt) {
+  let w = 14;
+  for (const ch of txt) w += ch.charCodeAt(0) > 255 ? 11 : 6.5;
+  return Math.ceil(w);
+}
+
+/* delegate_task 节点的分形徽章：「⊕ 分形×N」或「⏳ 运行中」 */
+function drawBadge(g, n, c) {
+  const hasKids = !!(n.children && n.children.length);
+  const isPend = !!(n.meta && n.meta.pending);
+  if (!hasKids && !isPend) return;
+  const txt = hasKids ? ("⊕ 分形×" + n.children.length) : "⏳ 运行中";
+  const w = badgeWidth(txt);
+  el("rect", { x: NODE_W - w - 2, y: -9, width: w, height: 17, rx: 8.5,
+               fill: "#ffffff", stroke: c, "stroke-width": 1.2 }, g);
+  const t = el("text", { "class": "badge", x: NODE_W - w / 2 - 2, y: 3.5,
+                         "text-anchor": "middle", "font-size": 9.5, fill: c }, g);
+  t.textContent = txt;
+}
+
+function drawNode(n) {
+  const c = colorOf(n);
+  const g = el("g", { "class": "node", "transform": `translate(${n.x},${n.y})` }, nodeLayer);
+  el("rect", {
+    "class": "body", "width": NODE_W, "height": NODE_H, "rx": 10,
+    "stroke": c, "stroke-width": n.kind === "answer" ? 2.6 : 1.6
+  }, g);
+  el("circle", { "cx": 19, "cy": NODE_H / 2, "r": 11.5, "fill": c }, g);
+  const glyph = el("text", { "class": "glyph", "x": 19, "y": NODE_H / 2 + 4, "text-anchor": "middle" }, g);
+  glyph.textContent = KIND_GLYPH[n.kind] || "·";
+  const label = el("text", { "class": "label", "x": 38, "y": 25 }, g);
+  label.textContent = truncate(n.label, 11);
+  const sub = el("text", { "class": "sub", "x": 38, "y": 43 }, g);
+  sub.textContent = subLine(n);
+  drawBadge(g, n, c);
+  g.addEventListener("click", ev => {
+    if (suppressClick) return;
+    ev.stopPropagation();
+    selectNode(n.id);
+  });
+  g.addEventListener("dblclick", ev => {
+    ev.stopPropagation();
+    if (n.children && n.children.length) {
+      drillInto(n);
+    } else if (n.meta && n.meta.pending) {
+      showToast("子任务仍在后台运行，稍后在 REPL 用 /graph 刷新");
+    } else if (n.expandable) {
+      showToast("该工具调用没有可展开的子图");
+    }
+  });
+  nodeViews.set(n.id, g);
+}
+
+function render() {
+  const g = visibleGraph();
+  layout(g);
+  nodeMap = new Map(g.nodes.map(n => [n.id, n]));
+  edgeViews = [];
+  nodeViews = new Map();
+  edgeLayer.textContent = "";
+  nodeLayer.textContent = "";
+  g.edges.forEach(drawEdge);
+  g.nodes.forEach(drawNode);
+  currentEdges = g.edges;
+  selectedId = null;
+  refreshToggleLabel();
+}
+
+/* ---------- 分形钻取 ---------- */
+function drillInto(n) {
+  if (n.children.length === 1) {
+    const c = n.children[0];
+    pushView({
+      nodes: c.nodes, edges: c.edges,
+      crumb: "子任务: " + truncate(c.question || n.label, 30),
+      question: c.question || ""
+    });
+  } else {
+    // 一次 delegate 孵化多个子 agent：命名空间隔离后同视图并列展示
+    const nodes = [], edges = [];
+    n.children.forEach((c, i) => {
+      const p = "c" + i + "__";
+      c.nodes.forEach(cn => nodes.push(Object.assign({}, cn, { id: p + cn.id })));
+      c.edges.forEach(ce => edges.push({ source: p + ce.source, target: p + ce.target, kind: ce.kind }));
+    });
+    pushView({
+      nodes: nodes, edges: edges,
+      crumb: n.children.length + " 个并行子任务",
+      question: n.children.map(c => c.question || "").join("；")
+    });
+  }
+  showToast("已下钻到子图，点击顶部面包屑可返回");
+}
+
+function pushView(v) {
+  viewStack.push(v);
+  render();
+  fitView();
+  updateBreadcrumb();
+  clearSelection();
+}
+
+function updateBreadcrumb() {
+  const bar = document.getElementById("breadcrumb");
+  bar.innerHTML = "";
+  bar.classList.toggle("show", viewStack.length > 1);
+  viewStack.forEach((v, i) => {
+    const s = document.createElement("span");
+    const isLast = i === viewStack.length - 1;
+    s.className = "crumb" + (isLast ? " current" : "");
+    s.textContent = v.crumb;
+    if (!isLast) {
+      s.addEventListener("click", () => {
+        viewStack = viewStack.slice(0, i + 1);
+        render();
+        fitView();
+        updateBreadcrumb();
+        clearSelection();
+      });
+    }
+    bar.appendChild(s);
+    if (!isLast) {
+      const sep = document.createElement("span");
+      sep.className = "sep";
+      sep.textContent = "›";
+      bar.appendChild(sep);
+    }
+  });
+  const cur = currentView();
+  document.getElementById("traceTitle").textContent =
+    (TRACE.id || "") + " · " + truncate(cur.question || TRACE.question, 36);
+}
+
+/* ---------- 缩放 / 平移 ---------- */
+let scale = 1, tx = 0, ty = 0;
+function applyTransform() {
+  viewport.setAttribute("transform", `translate(${tx},${ty}) scale(${scale})`);
+}
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+  const f = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const ns = Math.min(4, Math.max(0.15, scale * f));
+  tx = mx - (mx - tx) * (ns / scale);
+  ty = my - (my - ty) * (ns / scale);
+  scale = ns;
+  applyTransform();
+}, { passive: false });
+
+let panning = false, moved = false, suppressClick = false, px = 0, py = 0;
+svg.addEventListener("mousedown", ev => {
+  if (ev.button !== 0) return;
+  panning = true; moved = false;
+  px = ev.clientX; py = ev.clientY;
+});
+window.addEventListener("mousemove", ev => {
+  if (!panning) return;
+  const dx = ev.clientX - px, dy = ev.clientY - py;
+  if (Math.abs(dx) + Math.abs(dy) > 4) { moved = true; svg.classList.add("panning"); }
+  if (moved) { tx += dx; ty += dy; px = ev.clientX; py = ev.clientY; applyTransform(); }
+});
+window.addEventListener("mouseup", () => {
+  panning = false; svg.classList.remove("panning");
+  if (moved) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 90); }
+  moved = false;
+});
+svg.addEventListener("click", () => { if (!suppressClick) clearSelection(); });
+
+function graphBounds() {
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  nodeMap.forEach(n => {
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + NODE_W); maxY = Math.max(maxY, n.y + NODE_H);
+  });
+  if (minX > maxX) return null;
+  return { x: minX - 50, y: minY - 50, w: maxX - minX + 100, h: maxY - minY + 100 };
+}
+function fitView() {
+  const b = graphBounds();
+  if (!b) return;
+  const rect = svg.getBoundingClientRect();
+  const s = Math.min(rect.width / b.w, rect.height / b.h, 1.4);
+  scale = Math.max(0.15, s);
+  tx = (rect.width - b.w * scale) / 2 - b.x * scale;
+  ty = (rect.height - b.h * scale) / 2 - b.y * scale;
+  applyTransform();
+}
+
+/* ---------- 选中 / 祖先高亮 / 详情 ---------- */
+function ancestorsOf(id) {
+  const rev = new Map();
+  currentEdges.forEach(e => {
+    if (!rev.has(e.target)) rev.set(e.target, []);
+    rev.get(e.target).push(e.source);
+  });
+  const seen = new Set([id]);
+  const stack = [id];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const p of (rev.get(cur) || [])) {
+      if (!seen.has(p)) { seen.add(p); stack.push(p); }
+    }
+  }
+  return seen;
+}
+function clearHighlight() {
+  edgeViews.forEach(v => { v.el.classList.remove("hl"); v.el.setAttribute("marker-end", "url(#arrow)"); });
+  nodeViews.forEach(g => g.classList.remove("hl"));
+}
+function clearSelection() {
+  selectedId = null;
+  clearHighlight();
+  nodeViews.forEach(g => g.classList.remove("selected"));
+  dBadge.textContent = "节点";
+  dBadge.style.background = "#a8a29e";
+  dTitle.textContent = "详情";
+  detailBody.innerHTML = '<div class="d-empty">点击图中的节点查看完整内容</div>';
+}
+function selectNode(id) {
+  selectedId = id;
+  clearHighlight();
+  nodeViews.forEach(g => g.classList.remove("selected"));
+  const anc = ancestorsOf(id);
+  edgeViews.forEach(v => {
+    if (anc.has(v.source) && anc.has(v.target)) {
+      v.el.classList.add("hl");
+      v.el.setAttribute("marker-end", "url(#arrowHl)");
+    }
+  });
+  nodeViews.forEach((g, nid) => {
+    if (anc.has(nid)) g.classList.add("hl");
+    if (nid === id) g.classList.add("selected");
+  });
+  const n = nodeMap.get(id);
+  if (n) showDetail(n);
+}
+function metaRow(k, v) {
+  const row = document.createElement("div"); row.className = "row";
+  const kk = document.createElement("span"); kk.className = "k"; kk.textContent = k;
+  const vv = document.createElement("span"); vv.className = "v"; vv.textContent = v;
+  row.appendChild(kk); row.appendChild(vv);
+  return row;
+}
+function showDetail(n) {
+  const c = colorOf(n);
+  dBadge.textContent = KIND_NAMES[n.kind] || n.kind;
+  dBadge.style.background = c;
+  dTitle.textContent = n.label || "";
+  detailBody.innerHTML = "";
+  const meta = document.createElement("div"); meta.className = "d-meta";
+  meta.appendChild(metaRow("节点 id", n.id));
+  if (n.kind === "tool_call" && n.meta) {
+    meta.appendChild(metaRow("tool_call_id", n.meta.tool_call_id || "—"));
+  }
+  if (n.kind === "tool_result" && n.meta) {
+    meta.appendChild(metaRow("状态", n.meta.status === "error" ? "失败 (error)" : "成功 (ok)"));
+    if (n.meta.tool_call_id) meta.appendChild(metaRow("tool_call_id", n.meta.tool_call_id));
+  }
+  if (n.meta && n.meta.chars != null) meta.appendChild(metaRow("内容长度", n.meta.chars + " 字符"));
+  if (n.meta && n.meta.pending) meta.appendChild(metaRow("子任务", "后台运行中 ⏳"));
+  detailBody.appendChild(meta);
+  const content = document.createElement("div"); content.className = "d-content";
+  content.textContent = n.content || "(空)";
+  detailBody.appendChild(content);
+  if (n.kind === "tool_call" && n.meta && n.meta.arguments != null) {
+    const h = document.createElement("div"); h.className = "d-hint";
+    h.textContent = "解析后的参数：";
+    detailBody.appendChild(h);
+    const args = document.createElement("div"); args.className = "d-content";
+    try { args.textContent = JSON.stringify(n.meta.arguments, null, 2); }
+    catch (e) { args.textContent = String(n.meta.arguments); }
+    detailBody.appendChild(args);
+  }
+  if (n.children && n.children.length) {
+    const h = document.createElement("div"); h.className = "d-hint";
+    h.textContent = "双击可下钻到 " + n.children.length + " 个子任务图：";
+    detailBody.appendChild(h);
+    const ul = document.createElement("ul"); ul.className = "d-kids";
+    n.children.forEach(c => {
+      const li = document.createElement("li");
+      li.textContent = truncate(c.question || "(无题)", 42);
+      ul.appendChild(li);
+    });
+    detailBody.appendChild(ul);
+  } else if (n.meta && n.meta.pending) {
+    const hint = document.createElement("div"); hint.className = "d-hint";
+    hint.textContent = "⏳ 子任务仍在后台运行，完成后在 REPL 输入 /graph 刷新本图。";
+    detailBody.appendChild(hint);
+  } else if (n.expandable) {
+    const hint = document.createElement("div"); hint.className = "d-hint";
+    hint.textContent = "⌘ 分形节点：delegate_task 委派节点可双击展开为子 Agent 推理子图。";
+    detailBody.appendChild(hint);
+  }
+}
+
+/* ---------- Toast ---------- */
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2600);
+}
+
+/* ---------- 工具栏 ---------- */
+function chip(k, v) {
+  const s = document.createElement("span");
+  s.className = "chip";
+  const b = document.createElement("b"); b.textContent = v;
+  s.appendChild(document.createTextNode(k + " "));
+  s.appendChild(b);
+  return s;
+}
+function refreshToggleLabel() {
+  const nR = currentView().nodes.filter(n => n.kind === "reasoning").length;
+  btnToggle.textContent = (collapseReasoning ? "展开推理 (" : "收起推理 (") + nR + ")";
+  btnToggle.classList.toggle("active", collapseReasoning);
+}
+function initToolbar() {
+  document.title = PAGE_TITLE;
+  const chips = document.getElementById("metaChips");
+  const m = TRACE.meta || {};
+  if (m.model) chips.appendChild(chip("模型", m.model));
+  if (m.duration_s != null) chips.appendChild(chip("耗时", m.duration_s + " s"));
+  if (m.api_calls != null) chips.appendChild(chip("API 调用", m.api_calls));
+  chips.appendChild(chip("节点", TRACE.nodes.length));
+  chips.appendChild(chip("边", TRACE.edges.length));
+
+  btnToggle.addEventListener("click", () => {
+    collapseReasoning = !collapseReasoning;
+    render();
+    fitView();
+    clearSelection();
+    if (collapseReasoning) showToast("已收起当前视图的推理节点，边已自动重连");
+  });
+  document.getElementById("btnReset").addEventListener("click", fitView);
+  document.getElementById("detailClose").addEventListener("click", clearSelection);
+}
+
+window.addEventListener("resize", fitView);
+initToolbar();
+render();
+fitView();
+updateBreadcrumb();
+clearSelection();
+</script>
+</body>
+</html>
