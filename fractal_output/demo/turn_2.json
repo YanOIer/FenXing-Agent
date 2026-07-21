@@ -2,7 +2,7 @@
   "id": "turn_2",
   "question": "对比 Python 3.13 和 3.12 的性能，顺便查一下官方基准数据",
   "answer": "结论：Python 3.13 相对 3.12 在官方 pyperformance 套件上几何平均快约 5%，本地复测 +5.9%，合并口径 1.054x，数字可信。\n\n要点：\n1. 提升主要来自 specializing adaptive 解释器；数值类子项最明显（scimark_fft +12%，nbody +9%，raytrace +7%），regex_dna 基本持平。\n2. free-threaded（no-GIL，PEP 703）构建默认关闭：多线程 CPU 密集任务接近线性加速（4 线程约 3.2x），但单线程回退约 8%，且不少 C 扩展尚未兼容。\n3. 实验性 JIT 在纯 Python 数值循环上 +2~9%，仍不建议生产开启。\n\n建议：常规服务直接用默认构建的 3.13 即可获得约 5% 的免费提速；若吃满多核 CPU 且依赖纯 Python，可评估 free-threaded 构建。",
-  "created_at": "2026-07-18T14:17:44+08:00",
+  "created_at": "2026-07-21T08:47:53+08:00",
   "meta": {
     "model": "demo-synthetic",
     "api_calls": 3,

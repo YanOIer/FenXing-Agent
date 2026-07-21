@@ -2,7 +2,7 @@
   "id": "turn_5",
   "question": "帮我把 20 个竞品官网的定价页抓下来汇总成表（后台慢慢跑），先告诉我你打算怎么做",
   "answer": "计划如下：\n1. 从竞品清单读出 20 个官网 URL，逐个抓取 /pricing 页面（限速并发 3，带重试）；\n2. 用 read_file/解析规则抽取套餐名、价格、计费周期、核心限制；\n3. 汇总成 Markdown 对比表并写入 competitors_pricing.md。\n\n任务已提交后台运行（⏳），完成后我会把汇总表给你。",
-  "created_at": "2026-07-18T14:17:44+08:00",
+  "created_at": "2026-07-21T08:47:53+08:00",
   "meta": {
     "model": "demo-synthetic",
     "api_calls": 2,

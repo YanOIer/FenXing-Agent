@@ -472,9 +472,9 @@ def run_demo(out_dir: str = DEFAULT_DEMO_DIR) -> list[tuple[str, str]]:
         html = render_trace_html(trace, title=f"演示 {i} · {q[:20]}")
         json_path, html_path = save_trace(trace, html, out_dir)
         paths.append((json_path, html_path))
-        print(f"✔ turn_{i}: {html_path}")
+        print(f"[OK] turn_{i}: {html_path}")
         print(f"           {json_path}")
-    print(f"\n共生成 {len(paths)} 组演示图，目录：{out_dir}")
+    print(f"\n[GENERATED] {len(paths)} demo graphs in: {out_dir}")
     return paths
 
 

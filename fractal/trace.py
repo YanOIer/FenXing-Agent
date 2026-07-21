@@ -125,6 +125,8 @@ def build_turn_trace(
     turn_id: str,
     meta: dict | None = None,
     child_resolver: Any = None,
+    started_at: float | None = None,
+    ended_at: float | None = None,
     _depth: int = 0,
 ) -> dict:
     """把一轮交互的新增消息段构建成图 JSON dict。
@@ -138,6 +140,9 @@ def build_turn_trace(
         child_resolver: 可选回调 ``f(goal) -> record|None``；遇到 delegate_task
             工具调用时按 goal 查询子 agent 轨迹，命中则递归生成子图挂到
             节点的 ``children``，未命中则标记 ``meta.pending = True``。
+        started_at / ended_at: 可选的本轮真实起止 Unix 时间。两者都有时每个
+            节点按 seq 在窗口内线性插值得到 ``meta.ts``（question.ts==started_at，
+            answer.ts==ended_at）；否则 ts=None（渲染层回退按 seq 等间隔播放）。
         _depth: 内部递归深度（外部调用勿传），超过 _MAX_FRACTAL_DEPTH 停止下钻。
     """
     nodes: list[dict] = []

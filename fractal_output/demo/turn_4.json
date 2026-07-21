@@ -2,7 +2,7 @@
   "id": "turn_4",
   "question": "调研并对比三个 Python Web 框架（Flask / Django / FastAPI），给出选型建议",
   "answer": "三框架对比（调研自 3 个并行子任务，基准数字来自孙任务）：\n\n| 维度 | Flask | Django | FastAPI |\n|---|---|---|---|\n| 定位 | 轻量内核、自由拼装 | 全家桶、batteries-included | 异步高性能、类型驱动 |\n| 框架层基准 | 6-9k req/s（单机单 worker） | 5-8k req/s | 25-40k req/s |\n| 开箱功能 | 需自选 ORM/校验/迁移 | ORM/admin/auth/迁移全带 | 自带校验+OpenAPI，无 admin/ORM |\n| 典型场景 | 原型、教学、中小服务 | 企业级 CRUD、内容平台 | IO 密集微服务、LLM 推理网关 |\n\n选型建议：要快出完整产品选 Django；做高性能 API / LLM 服务选 FastAPI；做原型或想要完全自由的选型选 Flask。",
-  "created_at": "2026-07-18T14:17:44+08:00",
+  "created_at": "2026-07-21T08:47:53+08:00",
   "meta": {
     "model": "demo-synthetic",
     "api_calls": 3,
@@ -71,11 +71,11 @@
           "id": "turn_4.c1",
           "question": "调研 Flask 的最新生态与适用场景，给出 3 条要点",
           "answer": "Flask 调研结论：\n1. 轻量内核 + 自由选型，生态成熟但需自行拼装（ORM/校验/迁移都要选）。\n2. 适合原型、教学、中小服务；大型项目样板成本高。\n3. 份额被 FastAPI/Django 挤压，但存量巨大、资料最全。",
-          "created_at": "2026-07-18T14:17:44+08:00",
+          "created_at": "2026-07-21T08:47:53+08:00",
           "meta": {
             "depth": 1,
             "role": "leaf",
-            "record_id": "demo-97458",
+            "record_id": "demo-88966",
             "duration_s": 0.0
           },
           "nodes": [
@@ -232,11 +232,11 @@
           "id": "turn_4.c2",
           "question": "调研 Django 的最新生态与适用场景，给出 3 条要点",
           "answer": "Django 调研结论：\n1. batteries-included：ORM/admin/auth/迁移开箱即用，DRF 成熟。\n2. 适合企业级 CRUD、内容平台、快速交付；学习曲线平缓但框架较重。\n3. 异步能力在补强，纯 IO 高并发仍非首选。",
-          "created_at": "2026-07-18T14:17:44+08:00",
+          "created_at": "2026-07-21T08:47:53+08:00",
           "meta": {
             "depth": 1,
             "role": "leaf",
-            "record_id": "demo-64386",
+            "record_id": "demo-40478",
             "duration_s": 0.0
           },
           "nodes": [
@@ -393,11 +393,11 @@
           "id": "turn_4.c3",
           "question": "调研 FastAPI 的最新生态与性能基准，给出 3 条要点",
           "answer": "FastAPI 调研结论：\n1. ASGI 异步 + Pydantic v2，性能与 DX 俱佳，公开基准领先 Flask/Django 3-8x。\n2. 适合 IO 密集微服务、LLM/ML 推理网关；自动 OpenAPI 文档。\n3. 无全家桶，企业级后台需另配 admin/ORM。",
-          "created_at": "2026-07-18T14:17:44+08:00",
+          "created_at": "2026-07-21T08:47:53+08:00",
           "meta": {
             "depth": 1,
             "role": "orchestrator",
-            "record_id": "demo-85074",
+            "record_id": "demo-59635",
             "duration_s": 0.0
           },
           "nodes": [
@@ -488,11 +488,11 @@
                   "id": "turn_4.c3.c1",
                   "question": "查询并整理 Python Web 框架公开基准数据（requests/sec）",
                   "answer": "基准整理：公开套件（多 worker）FastAPI 档约 100k-200k req/s，Flask 20k-40k，Django 15k-35k；单机单 worker 简单路由 FastAPI 25k-40k vs Flask 6-9k vs Django 5-8k。结论：框架层差距 3-8x，真实业务差距通常收窄至 1.2-2x。",
-                  "created_at": "2026-07-18T14:17:44+08:00",
+                  "created_at": "2026-07-21T08:47:53+08:00",
                   "meta": {
                     "depth": 2,
                     "role": "leaf",
-                    "record_id": "demo-86326",
+                    "record_id": "demo-14448",
                     "duration_s": 0.0
                   },
                   "nodes": [
