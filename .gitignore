@@ -159,10 +159,8 @@ apps/desktop/demo/
 # pr-infographic-workflow reference (storage rule + lapse #8 / #COMMIT-1).
 infographic/
 
-# FenXing: user session fractal graphs (keep the committed demo set)
-fractal_output/*
-!fractal_output/demo/
-!fractal_output/demo/**
+# FenXing: user session fractal graphs (generated artifacts, do not track)
+fractal_output/
 
 # FenXing: README screenshots live under docs/images (negate the generic images/ rule above)
 !docs/images/

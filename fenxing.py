@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """分形Agent · FractalAgent —— 命令行入口。
 
-    python fenxing.py [--model X] [--toolsets web,terminal] [--demo]
+    python fenxing.py [--model X] [--toolsets web,terminal] [--demo] [--no-open]
 
 每轮问答除打印答案外，还会把「从问题到答案的推理过程」渲染成一张可交互的
-二维分形图（HTML），输出到 fractal_output/<session_id>/turn_<N>.html。
+二维分形图（HTML），输出到 fractal_output/<session_id>/turn_<N>.html，
+并自动用浏览器打开该图（可用 --no-open 关闭）。
 """
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+import webbrowser
 from pathlib import Path
 
 BANNER = r"""
@@ -27,7 +29,8 @@ HELP_TEXT = """\
   /help    显示本帮助
   /quit    退出
 直接输入其他内容即向 Agent 提问。每张图保存为 fractal_output/<session>/turn_<N>.html，
-用浏览器打开即可缩放、拖拽、点击节点查看完整推理内容。\
+问答后默认自动用浏览器打开（可用 --no-open 关闭），图中可缩放、拖拽、点击节点
+查看完整推理内容。\
 """
 
 _KNOWN_KEY_VARS = (
@@ -57,13 +60,36 @@ def _credentials_available() -> bool:
 
 
 def _print_credential_hint() -> None:
-    print("⚠ 未检测到可用的 API key，无法启动问答模式。\n")
+    print("! 未检测到可用的 API key，无法启动问答模式。\n")
     print("请任选其一配置后再试：")
     print("  1. 在 ~/.hermes/.env 中写入一行，例如：")
     print("       OPENROUTER_API_KEY=sk-or-...")
     print("  2. 或直接设置环境变量（如 OPENAI_API_KEY / DEEPSEEK_API_KEY 等）；")
     print("  3. 模型与服务商的详细配置见 ~/.hermes/config.yaml。\n")
-    print("提示：没有 key 也可以先看效果 —— 运行  python fenxing.py --demo")
+    print("提示：没有 key 也可以先看效果 -- 运行  python fenxing.py --demo")
+
+
+def _open_html(path: str | None) -> None:
+    """用系统默认浏览器打开分形图 HTML；失败时静默。"""
+    if not path:
+        return
+    try:
+        uri = Path(path).resolve().as_uri()
+        webbrowser.open(uri, new=2)  # new=2 尽量在新标签页打开
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _build_agent_kwargs(args: argparse.Namespace) -> dict:
+    """根据命令行参数构造 FractalAgent 的 agent_kwargs。"""
+    agent_kwargs: dict = {}
+    if args.model:
+        agent_kwargs["model"] = args.model
+    if args.toolsets:
+        agent_kwargs["enabled_toolsets"] = [
+            s.strip() for s in args.toolsets.split(",") if s.strip()
+        ]
+    return agent_kwargs
 
 
 def run_repl(args: argparse.Namespace) -> int:
@@ -72,13 +98,7 @@ def run_repl(args: argparse.Namespace) -> int:
         _print_credential_hint()
         return 2
 
-    agent_kwargs: dict = {}
-    if args.model:
-        agent_kwargs["model"] = args.model
-    if args.toolsets:
-        agent_kwargs["enabled_toolsets"] = [
-            s.strip() for s in args.toolsets.split(",") if s.strip()
-        ]
+    agent_kwargs = _build_agent_kwargs(args)
 
     try:
         from fractal.agent import FractalAgent
@@ -108,9 +128,11 @@ def run_repl(args: argparse.Namespace) -> int:
                 refreshed = fa.refresh_last()
                 if refreshed and refreshed.get("html_path"):
                     print(f"最新推理图（已刷新）：{refreshed['html_path']}")
+                    if getattr(args, "open", True):
+                        _open_html(refreshed["html_path"])
                     pc = refreshed.get("pending_children", 0)
                     if pc:
-                        print(f"⏳ 仍有 {pc} 个子任务在后台运行，稍后可再次 /graph 刷新。")
+                        print(f"[pending] 仍有 {pc} 个子任务在后台运行，稍后可再次 /graph 刷新。")
                 elif refreshed and refreshed.get("trace_error"):
                     print(f"刷新失败：{refreshed['trace_error']}")
                 else:
@@ -135,13 +157,30 @@ def run_repl(args: argparse.Namespace) -> int:
         print(f"\n{result['answer']}")
         if result.get("html_path"):
             print(f"\n推理分形图：{result['html_path']}")
+            if getattr(args, "open", True):
+                _open_html(result["html_path"])
         if result.get("pending_children"):
-            print(f"⏳ {result['pending_children']} 个子任务仍在后台运行，"
+            print(f"[pending] {result['pending_children']} 个子任务仍在后台运行，"
                   f"完成后输入 /graph 刷新分形图")
         if result.get("trace_error"):
             print(f"（绘图环节出错但不影响回答：{result['trace_error']}）")
 
-    print("再见 👋")
+    print("再见")
+    return 0
+
+
+def run_gui(args: argparse.Namespace) -> int:
+    """启动 tkinter 图形交互窗口。"""
+    if not _credentials_available():
+        _print_credential_hint()
+        return 2
+    try:
+        from fractal.gui import FractalGui
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠ 无法启动 GUI：{type(exc).__name__}: {exc}")
+        print("请确认当前环境支持图形界面；也可使用命令行模式：python fenxing.py")
+        return 2
+    FractalGui(agent_kwargs=_build_agent_kwargs(args)).run()
     return 0
 
 
@@ -155,12 +194,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="逗号分隔的工具集，如 web,terminal")
     parser.add_argument("--demo", action="store_true",
                         help="运行合成演示（无需 API key）后退出")
+    parser.add_argument("--no-open", dest="open", action="store_false", default=True,
+                        help="问答后不自动用浏览器打开分形图")
+    parser.add_argument("--gui", action="store_true",
+                        help="启动 tkinter 图形窗口交互（默认仍为命令行 REPL）")
     args = parser.parse_args(argv)
 
     if args.demo:
         from fractal.demo import run_demo
         run_demo()
         return 0
+    if args.gui:
+        return run_gui(args)
     return run_repl(args)
 
 
