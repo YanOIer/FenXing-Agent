@@ -14,9 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def main() -> int:
     if not os.environ.get("KIMI_API_KEY"):
-        print("❌ 缺少 KIMI_API_KEY"); return 2
-    # 桌面环境的网关缺 /v1 段会导致 404，且必须显式指定模型
-    os.environ["KIMI_BASE_URL"] = "https://agent-gw.kimi.com/coding/v1"
+        print("缺少 KIMI_API_KEY"); return 2
+    # 使用 Kimi 开放平台标准入口（api.moonshot.cn），模型名取可用列表中的 kimi-k2.6
+    os.environ["KIMI_BASE_URL"] = "https://api.moonshot.cn/v1"
 
     from fractal.agent import FractalAgent
     from fractal import recorder
@@ -30,7 +30,7 @@ def main() -> int:
         agent_kwargs={
             "quiet_mode": True,
             "platform": "fractal",
-            "model": "kimi-for-coding",
+            "model": "kimi-k2.6",
             "enabled_toolsets": ["delegation"],
             "max_iterations": 12,
         },

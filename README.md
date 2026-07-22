@@ -30,7 +30,7 @@
 
 ![分形图 · 下钻子图](docs/images/fractal-drill.png)
 
-**真实任务实拍（非合成演示）：`kimi-for-coding` 模型一次双委派，⊕分形×2，两个子 Agent 轨迹均已捕获挂载（`fractal/real_check.py` 可复现）**
+**真实任务实拍（非合成演示）：`kimi-k2.6` 模型一次双委派，⊕分形×2，两个子 Agent 轨迹均已捕获挂载（`fractal/real_check.py` 可复现）**
 
 ![分形图 · 真实委派任务](docs/images/fractal-real.png)
 
@@ -69,16 +69,16 @@ python fenxing.py --demo
    # ~/.hermes/.env —— 只放密钥
    OPENROUTER_API_KEY=sk-or-...
 
-   # 或者用 Kimi（注意：BASE_URL 必须包含 /v1 段）
+   # 或者用 Kimi（开放平台标准入口）
    KIMI_API_KEY=sk-kimi-...
-   KIMI_BASE_URL=https://api.kimi.com/coding/v1
+   KIMI_BASE_URL=https://api.moonshot.cn/v1
    ```
 
 3. 启动：
 
    ```bash
    python fenxing.py                    # 交互问答，每轮自动产图
-   python fenxing.py --model kimi-for-coding --toolsets delegation
+   python fenxing.py --model kimi-k2.6 --toolsets delegation
    python fenxing.py --model anthropic/claude-sonnet-4.6
    ```
 
