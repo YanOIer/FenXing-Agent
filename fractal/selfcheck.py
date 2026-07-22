@@ -211,14 +211,14 @@ def main() -> int:
     print("\n== 自检结果 ==")
     if failures:
         for f in failures:
-            print(f"❌ {f}")
+            print(f"[FAIL] {f}")
         print(f"\n共 {len(failures)} 项失败")
         return 1
-    print("✅ 图结构断言全部通过（question/answer 唯一性、度数、边引用、双向可达性）")
-    print("✅ turn_2 含 3 条 branch 边和 3 条 merge 边")
-    print("✅ turn_4 嵌套正确：根 delegate ×3 子图（depth=1），FastAPI 子图含 1 孙图（depth=2）")
-    print("✅ turn_5 delegate 节点 pending=True 且无 children")
-    print("✅ HTML 含 const TRACE（递归 children 可解析）与面包屑标识，无外部引用")
+    print("[OK] 图结构断言全部通过（question/answer 唯一性、度数、边引用、双向可达性）")
+    print("[OK] turn_2 含 3 条 branch 边和 3 条 merge 边")
+    print("[OK] turn_4 嵌套正确：根 delegate ×3 子图（depth=1），FastAPI 子图含 1 孙图（depth=2）")
+    print("[OK] turn_5 delegate 节点 pending=True 且无 children")
+    print("[OK] HTML 含 const TRACE（递归 children 可解析）与面包屑标识，无外部引用")
     return 0
 
 
