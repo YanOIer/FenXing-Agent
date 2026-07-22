@@ -127,6 +127,7 @@ def build_turn_trace(
     child_resolver: Any = None,
     started_at: float | None = None,
     ended_at: float | None = None,
+    partial: bool = False,
     _depth: int = 0,
 ) -> dict:
     """把一轮交互的新增消息段构建成图 JSON dict。
@@ -155,8 +156,12 @@ def build_turn_trace(
         summary: str | None = None,
         node_meta: dict | None = None,
         expandable: bool = False,
+        msg_idx: int | None = None,
     ) -> str:
         node_id = f"n{len(nodes)}"
+        meta_obj = dict(node_meta or {})
+        if msg_idx is not None:
+            meta_obj["msg_idx"] = msg_idx
         nodes.append(
             {
                 "id": node_id,
@@ -164,7 +169,7 @@ def build_turn_trace(
                 "label": label,
                 "summary": _summarize(content) if summary is None else summary,
                 "content": content or "",
-                "meta": node_meta or {},
+                "meta": meta_obj,
                 "expandable": bool(expandable),
             }
         )
@@ -180,11 +185,11 @@ def build_turn_trace(
     final_response = final_response or ""
     messages = [m for m in (new_messages or []) if isinstance(m, dict)]
 
-    qid = add_node("question", "问题", question)
+    qid = add_node("question", "问题", question, node_meta={"msg_idx": 0})
     tails: list[str] = [qid]
     pending: dict[str, tuple[str, str]] = {}  # tool_call_id -> (node_id, tool_name)
 
-    last_assistant_idx = max(
+    last_assistant_idx = -1 if partial else max(
         (i for i, m in enumerate(messages) if m.get("role") == "assistant"),
         default=-1,
     )
@@ -200,6 +205,7 @@ def build_turn_trace(
                     "推理",
                     reasoning,
                     node_meta={"chars": len(reasoning)},
+                    msg_idx=idx,
                 )
                 connect(tails, rid)
                 tails = [rid]
@@ -208,8 +214,9 @@ def build_turn_trace(
             tool_calls = msg.get("tool_calls") or []
             is_last_assistant = idx == last_assistant_idx
             # 非空 content 且不是最终回答 → 中间想法（thought）节点
-            if text.strip() and (tool_calls or not is_last_assistant):
-                tid = add_node("thought", "想法", text, node_meta={"chars": len(text)})
+            if text.strip() and (tool_calls or partial or not is_last_assistant):
+                tid = add_node("thought", "想法", text, node_meta={"chars": len(text)},
+                               msg_idx=idx)
                 connect(tails, tid)
                 tails = [tid]
 
@@ -229,6 +236,7 @@ def build_turn_trace(
                         summary=f"{name}(…)  { _summarize(json.dumps(args, ensure_ascii=False, default=str), 80) }",
                         node_meta={"arguments": args, "tool_call_id": tc.get("id")},
                         expandable=True,  # 分形预留：未来可展开为子 agent 的子图
+                        msg_idx=idx,
                     )
                     node_obj = nodes[-1]
                     # ---- 分形递归：delegate_task → 挂载子 agent 的真实轨迹子图 ----
@@ -267,6 +275,7 @@ def build_turn_trace(
                                 f"{turn_id}.c{gi + 1}",
                                 child_meta,
                                 child_resolver=child_resolver,
+                                partial=partial,
                                 _depth=_depth + 1,
                             ))
                         if child_traces:
@@ -298,6 +307,7 @@ def build_turn_trace(
                     "tool_call_id": call_id,
                     "chars": len(content),
                 },
+                msg_idx=idx,
             )
             if source is not None:
                 edges.append({"source": source, "target": rid, "kind": "flow"})
@@ -306,8 +316,10 @@ def build_turn_trace(
                 connect(tails, rid)
                 tails = [rid]
 
-    aid = add_node("answer", "答案", final_response)
-    connect(tails, aid)
+    if final_response.strip() or not partial:
+        answer_meta = {"msg_idx": last_assistant_idx} if last_assistant_idx >= 0 else None
+        aid = add_node("answer", "答案", final_response, node_meta=answer_meta)
+        connect(tails, aid)
 
     return {
         "id": str(turn_id),

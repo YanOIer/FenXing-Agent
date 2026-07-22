@@ -28,10 +28,13 @@ def check_graph(trace: dict, name: str, failures: list[str]) -> None:
 
     questions = [n for n in nodes if n["kind"] == "question"]
     answers = [n for n in nodes if n["kind"] == "answer"]
+    branched = bool((trace.get("meta") or {}).get("branched_from"))
     if len(questions) != 1:
         failures.append(f"{name}: question 节点数量={len(questions)}，应为 1")
-    if len(answers) != 1:
+    if not branched and len(answers) != 1:
         failures.append(f"{name}: answer 节点数量={len(answers)}，应为 1")
+    if branched and len(answers) < 1:
+        failures.append(f"{name}: 分叉重思考图至少应有 1 个 answer 节点")
 
     for e in edges:
         if e["source"] not in id_set or e["target"] not in id_set:
@@ -50,8 +53,9 @@ def check_graph(trace: dict, name: str, failures: list[str]) -> None:
 
     if questions and indeg[questions[0]["id"]] != 0:
         failures.append(f"{name}: question 入度={indeg[questions[0]['id']]}，应为 0")
-    if answers and outdeg[answers[0]["id"]] != 0:
-        failures.append(f"{name}: answer 出度={outdeg[answers[0]['id']]}，应为 0")
+    for answer in answers:
+        if outdeg[answer["id"]] != 0:
+            failures.append(f"{name}: answer {answer['id']} 出度={outdeg[answer['id']]}，应为 0")
 
     if questions:
         seen = set()
@@ -68,7 +72,7 @@ def check_graph(trace: dict, name: str, failures: list[str]) -> None:
 
     if answers:
         seen = set()
-        stack = [answers[0]["id"]]
+        stack = [a["id"] for a in answers] if branched else [answers[0]["id"]]
         while stack:
             cur = stack.pop()
             if cur in seen:

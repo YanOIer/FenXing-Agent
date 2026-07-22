@@ -64,6 +64,20 @@ def _count_pending(trace: dict) -> int:
     return n
 
 
+def _find_node(trace: dict, node_id: str) -> dict | None:
+    """递归查找节点；支持下钻子图里的 node_id。"""
+    for node in trace.get("nodes", []):
+        if not isinstance(node, dict):
+            continue
+        if node.get("id") == node_id:
+            return node
+        for child in node.get("children") or []:
+            found = _find_node(child, node_id)
+            if found is not None:
+                return found
+    return None
+
+
 class FractalAgent:
     """对 hermes `AIAgent` 的轻包装：多问上下文 + 每轮生成 trace/HTML 图。
 
@@ -75,15 +89,22 @@ class FractalAgent:
     """
 
     def __init__(self, output_dir: str = "fractal_output",
-                 agent_kwargs: dict | None = None, agent=None):
+                 agent_kwargs: dict | None = None, agent=None,
+                 streaming: bool = True, stream_callback=None):
         self.output_dir = Path(output_dir)
         self.session_id = "sess_" + datetime.now().strftime("%Y%m%d_%H%M%S")
         self._history: list = []
         self._turn = 0
         self._last_html_path: str | None = None
         self._last_turn: dict | None = None  # refresh_last() 用的上一轮快照
+        self.streaming = bool(streaming)
+        self.stream_callback = stream_callback
+        self._stream_write_every_steps = 3
+        self._stream_write_min_interval = 2.0
         if agent is not None:
             self._agent = agent
+            prev_step_callback = getattr(self._agent, "step_callback", None)
+            self._agent.step_callback = self._stream_step_callback(prev_step_callback)
         else:
             kwargs = {
                 "quiet_mode": True,
@@ -91,6 +112,24 @@ class FractalAgent:
                 "ephemeral_system_prompt": _REASONING_NETWORK_PROMPT,
             }
             kwargs.update(agent_kwargs or {})
+            prev_step_callback = kwargs.get("step_callback")
+            kwargs["step_callback"] = self._stream_step_callback(prev_step_callback)
+            # 自动从 config.yaml 解析 model（CLI 通过 --model 传递时优先）
+            if not kwargs.get("model"):
+                try:
+                    from pathlib import Path as _P
+                    import yaml as _yaml
+                    _cfg = _P.home() / ".hermes" / "config.yaml"
+                    if _cfg.is_file():
+                        _data = _yaml.safe_load(_cfg.read_text(encoding="utf-8"))
+                        _providers = _data.get("providers", {}) if isinstance(_data, dict) else {}
+                        for _pv in _providers.values():
+                            if isinstance(_pv, dict) and _pv.get("model"):
+                                kwargs["provider"] = kwargs.get("provider") or list(_providers.keys())[0]
+                                kwargs["model"] = _pv["model"]
+                                break
+                except Exception:  # noqa: BLE001
+                    pass
             # 延迟导入：避免 --demo / --help 等场景加载整个 hermes 依赖链
             from run_agent import AIAgent
             self._agent = AIAgent(**kwargs)
@@ -114,17 +153,26 @@ class FractalAgent:
         return _resolve
 
     def _render_turn(self, question: str, new_messages: list,
-                     final_response: str, turn_id: str, meta: dict,
-                     since: float) -> dict:
+                      final_response: str, turn_id: str, meta: dict,
+                      since: float, partial: bool = False) -> dict:
         from .trace import build_turn_trace
         from .render import render_trace_html, save_trace
 
         trace = build_turn_trace(
             question, new_messages, final_response, turn_id, meta,
             child_resolver=self._make_resolver(since),
+            partial=partial,
         )
         title = f"{turn_id} · {question[:24]}"
-        html = render_trace_html(trace, title=title)
+        rethink_url = None
+        if not partial:
+            try:
+                from .rethink_server import PORT
+                rethink_url = f"http://localhost:{PORT}/rethink?session={self.session_id}"
+            except Exception:  # noqa: BLE001
+                rethink_url = None
+        html = render_trace_html(trace, title=title, auto_refresh=partial,
+                                 rethink_url=rethink_url)
         json_path, html_path = save_trace(
             trace, html, self.output_dir / self.session_id)
         self._last_html_path = html_path
@@ -135,17 +183,70 @@ class FractalAgent:
             "pending_children": _count_pending(trace),
         }
 
+    def _stream_step_callback(self, prev_step_callback=None):
+        """包装 AIAgent.step_callback：节流写出 partial HTML，失败不影响对话。"""
+        def _callback(iteration: int, prev_tools: list) -> None:
+            if prev_step_callback is not None:
+                try:
+                    prev_step_callback(iteration, prev_tools)
+                except Exception:  # noqa: BLE001
+                    pass
+            state = getattr(self, "_stream_state", None)
+            if not self.streaming or not isinstance(state, dict):
+                return
+            now = time.time()
+            last_iter = int(state.get("last_iteration") or 0)
+            last_write = float(state.get("last_write") or 0.0)
+            if (iteration - last_iter) < self._stream_write_every_steps and (now - last_write) < self._stream_write_min_interval:
+                return
+            try:
+                messages = list(getattr(self._agent, "_session_messages", []) or [])
+                new_messages = messages[state["before"]:]
+                meta = {
+                    "model": getattr(self._agent, "model", None) or None,
+                    "api_calls": iteration,
+                    "duration_s": round(now - state["started_at"], 2),
+                    "streaming": True,
+                }
+                rendered = self._render_turn(
+                    state["question"], new_messages, "", state["turn_id"], meta,
+                    state["started_at"], partial=True,
+                )
+                state["last_iteration"] = iteration
+                state["last_write"] = now
+                if not state.get("announced") and self.stream_callback is not None:
+                    state["announced"] = True
+                    try:
+                        self.stream_callback(rendered["html_path"])
+                    except Exception:  # noqa: BLE001
+                        pass
+            except Exception:  # noqa: BLE001 —— 流式绘图失败不影响主对话
+                pass
+        return _callback
+
     # ------------------------------------------------------------------ 对外
-    def ask(self, question: str) -> dict:
+    def ask(self, question: str, trace_meta: dict | None = None) -> dict:
         """问一轮。返回 {"answer", "trace", "html_path", "json_path",
         "pending_children"(, "trace_error")}。"""
         self._turn += 1
         turn_id = f"turn_{self._turn}"
         before = len(self._history)
         t0 = time.time()
-        result = self._agent.run_conversation(
-            question, conversation_history=self._history
-        )
+        self._stream_state = {
+            "question": question,
+            "turn_id": turn_id,
+            "before": before,
+            "started_at": t0,
+            "last_iteration": 0,
+            "last_write": 0.0,
+            "announced": False,
+        }
+        try:
+            result = self._agent.run_conversation(
+                question, conversation_history=self._history
+            )
+        finally:
+            self._stream_state = None
         duration = time.time() - t0
         messages = result.get("messages") or []
         final_response = result.get("final_response") or ""
@@ -165,6 +266,7 @@ class FractalAgent:
                              if isinstance(m, dict) and m.get("role") == "assistant"),
             "duration_s": round(duration, 2),
         }
+        meta.update(trace_meta or {})
         # 保存本轮快照供 refresh_last() 使用
         self._last_turn = {
             "question": question,
@@ -173,14 +275,42 @@ class FractalAgent:
             "turn_id": turn_id,
             "meta": meta,
             "started_at": t0,
+            "history_start": before,
         }
         # 渲染/存图失败绝不允许中断问答主流程
         try:
-            out.update(self._render_turn(question, new_messages,
-                                         final_response, turn_id, meta, t0))
+            rendered = self._render_turn(question, new_messages,
+                                         final_response, turn_id, meta, t0)
+            out.update(rendered)
+            self._last_turn["trace"] = rendered.get("trace")
         except Exception as exc:  # noqa: BLE001 —— 有意兜底
             out["trace_error"] = f"{type(exc).__name__}: {exc}"
         return out
+
+    def rethink(self, node_id: str) -> dict:
+        """从上一张图中的某个节点之前截断 history，并要求 Agent 重新思考。"""
+        snap = self._last_turn
+        trace = (snap or {}).get("trace") if isinstance(snap, dict) else None
+        if not isinstance(trace, dict):
+            return {"trace_error": "还没有可重思考的推理图，先完成一轮问答。"}
+        node = _find_node(trace, node_id)
+        if node is None:
+            return {"trace_error": f"未找到节点 {node_id}"}
+        msg_idx = (node.get("meta") or {}).get("msg_idx")
+        if not isinstance(msg_idx, int):
+            return {"trace_error": f"节点 {node_id} 没有关联的步骤索引"}
+        base = int(snap.get("history_start") or 0)
+        cutoff = max(0, base + msg_idx)
+        self._history = list(self._history[:cutoff])
+        prompt = (
+            "请重新思考此步骤，并从这里开始重新推理。\n"
+            f"节点：{node_id}｜{node.get('kind')}｜{node.get('label')}\n"
+            f"原内容摘要：{node.get('summary') or node.get('content') or ''}"
+        )
+        return self.ask(prompt, trace_meta={
+            "branched_from": node_id,
+            "rethink_msg_idx": msg_idx,
+        })
 
     def refresh_last(self) -> dict | None:
         """用上一轮保存的快照重新构图渲染（后台子任务可能已完成）。

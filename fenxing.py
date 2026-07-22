@@ -25,6 +25,7 @@ BANNER = r"""
 HELP_TEXT = """\
 斜杠命令：
   /graph   刷新并打印最新推理图的 HTML 路径（后台子任务完成后用它把子图挂上）
+  /rethink <node_id>  从指定节点之前截断上下文并重新推理
   /demo    运行无需 API key 的合成演示（输出到 fractal_output/demo/）
   /help    显示本帮助
   /quit    退出
@@ -102,7 +103,14 @@ def run_repl(args: argparse.Namespace) -> int:
 
     try:
         from fractal.agent import FractalAgent
-        fa = FractalAgent(agent_kwargs=agent_kwargs)
+        fa = FractalAgent(
+            agent_kwargs=agent_kwargs,
+            streaming=args.streaming,
+            stream_callback=_open_html if getattr(args, "open", True) else None,
+        )
+        from fractal.rethink_server import register_agent, start_rethink_server
+        start_rethink_server()
+        register_agent(fa)
     except Exception as exc:  # noqa: BLE001 —— 给用户友好提示而不是 traceback
         print(f"⚠ 初始化 Agent 失败：{type(exc).__name__}: {exc}\n")
         print("请检查 ~/.hermes/config.yaml 与 ~/.hermes/.env 的配置是否完整、")
@@ -137,6 +145,32 @@ def run_repl(args: argparse.Namespace) -> int:
                     print(f"刷新失败：{refreshed['trace_error']}")
                 else:
                     print("还没有生成任何图，先问一个问题吧。")
+            elif cmd == "/rethink":
+                parts = q.split(maxsplit=1)
+                if len(parts) < 2 or not parts[1].strip():
+                    print("用法：/rethink <node_id>，例如 /rethink n4")
+                    continue
+                try:
+                    result = fa.rethink(parts[1].strip())
+                except KeyboardInterrupt:
+                    print("\n（已中断本轮重新思考）")
+                    continue
+                except Exception as exc:  # noqa: BLE001
+                    print(f"⚠ 重新思考失败：{type(exc).__name__}: {exc}")
+                    continue
+                if result.get("trace_error") and not result.get("answer"):
+                    print(f"重新思考失败：{result['trace_error']}")
+                    continue
+                print(f"\n{result.get('answer', '')}")
+                if result.get("html_path"):
+                    print(f"\n重新思考后的分形图：{result['html_path']}")
+                    if getattr(args, "open", True):
+                        _open_html(result["html_path"])
+                if result.get("pending_children"):
+                    print(f"[pending] {result['pending_children']} 个子任务仍在后台运行，"
+                          f"完成后输入 /graph 刷新分形图")
+                if result.get("trace_error"):
+                    print(f"（绘图环节出错但不影响回答：{result['trace_error']}）")
             elif cmd == "/demo":
                 from fractal.demo import run_demo
                 run_demo()
@@ -180,7 +214,8 @@ def run_gui(args: argparse.Namespace) -> int:
         print(f"⚠ 无法启动 GUI：{type(exc).__name__}: {exc}")
         print("请确认当前环境支持图形界面；也可使用命令行模式：python fenxing.py")
         return 2
-    FractalGui(agent_kwargs=_build_agent_kwargs(args)).run()
+    FractalGui(agent_kwargs=_build_agent_kwargs(args), streaming=args.streaming,
+               rethink_http=True).run()
     return 0
 
 
@@ -198,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="问答后不自动用浏览器打开分形图")
     parser.add_argument("--gui", action="store_true",
                         help="启动 tkinter 图形窗口交互（默认仍为命令行 REPL）")
+    parser.add_argument("--streaming", dest="streaming", action="store_true", default=True,
+                        help="AI 回答过程中持续刷新分形图（默认开启）")
+    parser.add_argument("--no-streaming", dest="streaming", action="store_false",
+                        help="关闭流式分形图，只在回答完成后生成最终图")
     args = parser.parse_args(argv)
 
     if args.demo:

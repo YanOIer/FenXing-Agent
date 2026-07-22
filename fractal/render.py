@@ -18,17 +18,62 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+__REFRESH_META__
 <title>__TITLE_HTML__</title>
 <style>
   :root {
+    --paper: #0d1117;
+    --paper-2: #161b22;
+    --ink: #e6edf3;
+    --ink-2: #8b949e;
+    --ink-3: #484f58;
+    --line: #21262d;
+    --card: #161b22;
+    --accent: #58a6ff;
+    --accent-glow: #1f6feb;
+    --edge: #30363d;
+    --edge-hl: #58a6ff;
+    --neon-1: #7c3aed;
+    --neon-2: #06b6d4;
+    --neon-3: #f59e0b;
+    --neon-4: #10b981;
+    --neon-5: #ef4444;
+    --toast-bg: #e6edf3;
+    --toast-fg: #0d1117;
+    --dot-fill: #1c2128;
+    --arrow-fill: #484f58;
+    --arrow-hl: #58a6ff;
+    --btn-accent-bg: rgba(88,166,255,.08);
+    --crumb-bg: var(--paper-2);
+    --crumb-hover: rgba(88,166,255,.1);
+    --crumb-cur-bg: var(--card);
+  }
+  [data-theme="light"] {
     --paper: #faf9f6;
+    --paper-2: #f5f4f1;
     --ink: #1c1917;
     --ink-2: #57534e;
     --ink-3: #a8a29e;
     --line: #e7e5e4;
     --card: #ffffff;
     --accent: #4f46e5;
+    --accent-glow: #3730a3;
     --edge: #a8a29e;
+    --edge-hl: #4f46e5;
+    --neon-1: #6d28d9;
+    --neon-2: #0e7490;
+    --neon-3: #b45309;
+    --neon-4: #15803d;
+    --neon-5: #b91c1c;
+    --toast-bg: #1c1917;
+    --toast-fg: #fafaf9;
+    --dot-fill: #e6e4df;
+    --arrow-fill: #a8a29e;
+    --arrow-hl: #4f46e5;
+    --btn-accent-bg: #eef2ff;
+    --crumb-bg: #f5f4f1;
+    --crumb-hover: #eceae6;
+    --crumb-cur-bg: #fff;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -46,7 +91,9 @@ _TEMPLATE = r"""<!DOCTYPE html>
     flex: 0 0 54px;
     display: flex; align-items: center; gap: 16px;
     padding: 0 16px;
-    background: var(--card);
+    background: rgba(22, 27, 34, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
     z-index: 10;
   }
@@ -70,24 +117,24 @@ _TEMPLATE = r"""<!DOCTYPE html>
     background: var(--card); border: 1px solid var(--line); border-radius: 8px;
     padding: 6px 12px; cursor: pointer;
   }
-  button:hover { border-color: var(--ink-3); background: #f5f4f1; }
-  button.active { border-color: var(--accent); color: var(--accent); }
+  button:hover { border-color: var(--accent); background: var(--btn-accent-bg); }
+  button.active { border-color: var(--accent); color: var(--accent); background: rgba(88, 166, 255, 0.12); }
 
   /* ---------- 面包屑（分形钻取） ---------- */
   #breadcrumb {
     display: none; align-items: center; gap: 4px;
     padding: 5px 16px;
-    background: #f5f4f1; border-bottom: 1px solid var(--line);
+    background: var(--crumb-bg); border-bottom: 1px solid var(--line);
     font-size: 12px; color: var(--ink-2); z-index: 9;
   }
   #breadcrumb.show { display: flex; }
   #breadcrumb .crumb { cursor: pointer; padding: 2px 8px; border-radius: 6px; }
-  #breadcrumb .crumb:hover { background: #eceae6; color: var(--ink); }
+  #breadcrumb .crumb:hover { background: var(--crumb-hover); color: var(--ink); }
   #breadcrumb .crumb.current {
     color: var(--ink); font-weight: 600; cursor: default;
-    background: #fff; border: 1px solid var(--line);
+    background: var(--crumb-cur-bg); border: 1px solid var(--line);
   }
-  #breadcrumb .crumb.current:hover { background: #fff; }
+  #breadcrumb .crumb.current:hover { background: var(--crumb-cur-bg); }
   #breadcrumb .sep { color: var(--ink-3); }
 
   /* ---------- 主区域 ---------- */
@@ -95,17 +142,31 @@ _TEMPLATE = r"""<!DOCTYPE html>
   #canvas { flex: 1; display: block; cursor: grab; }
   #canvas.panning { cursor: grabbing; }
 
-  .edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+  .edge {
+    fill: none; stroke: var(--edge); stroke-width: 1.5;
+    filter: drop-shadow(0 0 2px rgba(88, 166, 255, 0.15));
+  }
   .edge.dashed { stroke-dasharray: 6 4; }
-  .edge.hl { stroke: var(--accent); stroke-width: 2.4; }
+  .edge.flowing {
+    stroke-dasharray: 8 6;
+    animation: flowEdge 1.5s linear infinite;
+  }
+  @keyframes flowEdge {
+    to { stroke-dashoffset: -28; }
+  }
+  .edge.hl { stroke: var(--edge-hl); stroke-width: 2.4; filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.5)); }
 
   .node { cursor: pointer; }
-  .node rect.body { fill: #ffffff; stroke-width: 1.6; }
+  .node rect.body {
+    fill: var(--card); stroke-width: 1.6; rx: 14;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,.4));
+  }
+  .node:hover rect.body { filter: drop-shadow(0 2px 8px rgba(0,0,0,.4)) drop-shadow(0 0 10px rgba(88,166,255,.2)); }
   .node text { user-select: none; }
   .node .label { font-size: 13px; font-weight: 600; fill: var(--ink); }
   .node .sub { font-size: 10.5px; fill: var(--ink-2); }
-  .node.hl rect.body { stroke: var(--accent) !important; stroke-width: 3; }
-  .node.selected rect.body { filter: drop-shadow(0 2px 6px rgba(28,25,23,.18)); }
+  .node.hl rect.body { stroke: var(--accent) !important; stroke-width: 3; filter: drop-shadow(0 0 14px rgba(88,166,255,.5)) drop-shadow(0 2px 8px rgba(0,0,0,.4)); }
+  .node.selected rect.body { filter: drop-shadow(0 0 16px rgba(88,166,255,.4)) drop-shadow(0 2px 8px rgba(0,0,0,.5)); }
   .glyph { font-size: 11px; font-weight: 700; fill: #fff; }
   .badge { font-weight: 700; }
 
@@ -143,6 +204,9 @@ _TEMPLATE = r"""<!DOCTYPE html>
     padding: 10px 12px;
   }
   .d-hint { margin-top: 10px; font-size: 11.5px; color: var(--ink-2); }
+  .d-actions { margin: 12px 0; display: flex; gap: 8px; }
+  .d-actions button { border-color: var(--accent); color: var(--accent); background: var(--btn-accent-bg); }
+  .d-actions button:disabled { color: var(--ink-3); border-color: var(--line); background: var(--paper); cursor: wait; }
   .d-kids { margin-top: 6px; font-size: 12px; color: var(--ink); }
   .d-kids li { margin: 3px 0 3px 18px; }
   .d-empty { color: var(--ink-3); font-size: 13px; padding: 24px 8px; text-align: center; }
@@ -150,10 +214,10 @@ _TEMPLATE = r"""<!DOCTYPE html>
   /* ---------- Toast ---------- */
   #toast {
     position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px);
-    background: var(--ink); color: #fafaf9; font-size: 13px;
+    background: var(--toast-bg); color: var(--toast-fg); font-size: 13px;
     border-radius: 10px; padding: 10px 18px;
     opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
-    z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.18); max-width: 70vw;
+    z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.5); max-width: 70vw;
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
@@ -166,6 +230,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
     <div id="metaChips"></div>
     <div class="actions">
       <button id="btnToggleReasoning"></button>
+      <button id="btnToggleTheme" title="切换亮/暗主题">🌓</button>
       <button id="btnReset">重置视图</button>
     </div>
   </header>
@@ -175,14 +240,14 @@ _TEMPLATE = r"""<!DOCTYPE html>
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e"></path>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--arrow-fill)"></path>
         </marker>
         <marker id="arrowHl" viewBox="0 0 10 10" refX="9" refY="5"
                 markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5"></path>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--arrow-hl)"></path>
         </marker>
         <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
-          <circle cx="1.4" cy="1.4" r="1.4" fill="#e6e4df"></circle>
+          <circle cx="1.4" cy="1.4" r="1.0" fill="var(--dot-fill)"></circle>
         </pattern>
       </defs>
       <g id="viewport">
@@ -206,15 +271,17 @@ _TEMPLATE = r"""<!DOCTYPE html>
 "use strict";
 const TRACE = __TRACE_JSON__;
 const PAGE_TITLE = __TITLE_JS__;
+const RETHINK_BASE_URL = __RETHINK_URL_JS__;
 
-const KIND_COLORS = {
-  question: "#3730a3",   // 深靛蓝
-  reasoning: "#6d28d9",  // 紫
-  thought: "#0e7490",    // 青
-  tool_call: "#b45309",  // 琥珀
-  tool_result: "#15803d",// 绿（error 时覆盖为红）
-  answer: "#166534"      // 深绿
+const KIND_COLORS_DARK = {
+  question: "#818cf8", reasoning: "#a78bfa", thought: "#22d3ee",
+  tool_call: "#fbbf24", tool_result: "#34d399", answer: "#4ade80"
 };
+const KIND_COLORS_LIGHT = {
+  question: "#3730a3", reasoning: "#6d28d9", thought: "#0e7490",
+  tool_call: "#b45309", tool_result: "#15803d", answer: "#166534"
+};
+let KIND_COLORS = { ...KIND_COLORS_DARK };
 const KIND_NAMES = {
   question: "问题", reasoning: "推理", thought: "想法",
   tool_call: "工具调用", tool_result: "工具结果", answer: "答案"
@@ -251,7 +318,7 @@ let viewStack = [{
 function currentView() { return viewStack[viewStack.length - 1]; }
 
 function colorOf(n) {
-  if (n.kind === "tool_result" && n.meta && n.meta.status === "error") return "#b91c1c";
+  if (n.kind === "tool_result" && n.meta && n.meta.status === "error") return "#f87171";
   return KIND_COLORS[n.kind] || "#57534e";
 }
 function truncate(s, n) {
@@ -350,18 +417,21 @@ function drawEdge(e) {
 }
 
 function subLine(n) {
-  if (n.kind === "question") return "起点";
-  if (n.kind === "answer") return "终点";
+  const step = n.meta && n.meta.msg_idx != null ? ("[步骤" + (Number(n.meta.msg_idx) + 1) + "] ") : "";
+  let text = "";
+  if (n.kind === "question") return step + "起点";
+  if (n.kind === "answer") return step + "终点";
   if (n.kind === "tool_call") {
-    if (n.children && n.children.length) return "委派 · " + n.children.length + " 个子任务";
-    if (n.meta && n.meta.pending) return "委派 · 子任务运行中";
-    return "工具调用 · 可展开";
+    if (n.children && n.children.length) text = "委派 · " + n.children.length + " 个子任务";
+    else if (n.meta && n.meta.pending) text = "委派 · 子任务运行中";
+    else text = "工具调用 · 可展开";
+    return step + text;
   }
   if (n.kind === "tool_result") {
     const err = n.meta && n.meta.status === "error";
-    return "工具结果 · " + (err ? "失败" : "成功");
+    return step + "工具结果 · " + (err ? "失败" : "成功");
   }
-  return KIND_NAMES[n.kind] || n.kind;
+  return step + (KIND_NAMES[n.kind] || n.kind);
 }
 
 function badgeWidth(txt) {
@@ -616,6 +686,7 @@ function showDetail(n) {
   detailBody.innerHTML = "";
   const meta = document.createElement("div"); meta.className = "d-meta";
   meta.appendChild(metaRow("节点 id", n.id));
+  if (n.meta && n.meta.msg_idx != null) meta.appendChild(metaRow("步骤编号", Number(n.meta.msg_idx) + 1));
   if (n.kind === "tool_call" && n.meta) {
     meta.appendChild(metaRow("tool_call_id", n.meta.tool_call_id || "—"));
   }
@@ -626,6 +697,13 @@ function showDetail(n) {
   if (n.meta && n.meta.chars != null) meta.appendChild(metaRow("内容长度", n.meta.chars + " 字符"));
   if (n.meta && n.meta.pending) meta.appendChild(metaRow("子任务", "后台运行中 ⏳"));
   detailBody.appendChild(meta);
+  if (RETHINK_BASE_URL && n.meta && n.meta.msg_idx != null) {
+    const actions = document.createElement("div"); actions.className = "d-actions";
+    const btn = document.createElement("button"); btn.textContent = "重新思考此步骤";
+    btn.addEventListener("click", () => rethinkNode(n, btn));
+    actions.appendChild(btn);
+    detailBody.appendChild(actions);
+  }
   const content = document.createElement("div"); content.className = "d-content";
   content.textContent = n.content || "(空)";
   detailBody.appendChild(content);
@@ -660,6 +738,25 @@ function showDetail(n) {
   }
 }
 
+function rethinkNode(n, btn) {
+  if (!RETHINK_BASE_URL) return;
+  btn.disabled = true;
+  btn.textContent = "重新思考中…";
+  showToast("已提交重新思考请求，等待 Agent 生成新图");
+  fetch(RETHINK_BASE_URL + "&node=" + encodeURIComponent(n.id), { method: "POST" })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok || !data.ok) throw new Error(data.error || data.trace_error || "重新思考失败");
+      if (data.html_path) window.location.href = "file:///" + data.html_path.replace(/\\/g, "/").replace(/^\/+/, "");
+      else showToast("重新思考完成，但没有返回 HTML 路径");
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.textContent = "重新思考此步骤";
+      showToast(String(err.message || err));
+    });
+}
+
 /* ---------- Toast ---------- */
 let toastTimer = null;
 function showToast(msg) {
@@ -678,6 +775,44 @@ function chip(k, v) {
   s.appendChild(b);
   return s;
 }
+function graphMetrics(nodes, edges) {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const adj = new Map(nodes.map(n => [n.id, []]));
+  edges.forEach(e => {
+    if (byId.has(e.source) && byId.has(e.target)) adj.get(e.source).push(e.target);
+  });
+  const q = nodes.find(n => n.kind === "question");
+  let maxDepth = 0;
+  if (q) {
+    const seen = new Set([q.id]);
+    const queue = [{ id: q.id, d: 0 }];
+    while (queue.length) {
+      const cur = queue.shift();
+      maxDepth = Math.max(maxDepth, cur.d);
+      for (const t of (adj.get(cur.id) || [])) {
+        if (!seen.has(t)) { seen.add(t); queue.push({ id: t, d: cur.d + 1 }); }
+      }
+    }
+  }
+  const toolCalls = nodes.filter(n => n.kind === "tool_call").length;
+  const branchEdges = edges.filter(e => e.kind === "branch").length;
+  const memo = new Map();
+  function longest(id, visiting) {
+    if (memo.has(id)) return memo.get(id);
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    let best = 0;
+    for (const t of (adj.get(id) || [])) best = Math.max(best, 1 + longest(t, visiting));
+    visiting.delete(id);
+    memo.set(id, best);
+    return best;
+  }
+  let critical = 0;
+  nodes.forEach(n => { critical = Math.max(critical, longest(n.id, new Set())); });
+  const errors = nodes.filter(n => n.kind === "tool_result" && n.meta && n.meta.status === "error").length;
+  const chars = nodes.filter(n => n.kind === "reasoning").reduce((s, n) => s + Number((n.meta || {}).chars || 0), 0);
+  return { maxDepth, branchFactor: toolCalls ? (branchEdges / toolCalls).toFixed(2) : "N/A", critical, errors, chars };
+}
 function refreshToggleLabel() {
   const nR = currentView().nodes.filter(n => n.kind === "reasoning").length;
   btnToggle.textContent = (collapseReasoning ? "展开推理 (" : "收起推理 (") + nR + ")";
@@ -692,6 +827,12 @@ function initToolbar() {
   if (m.api_calls != null) chips.appendChild(chip("API 调用", m.api_calls));
   chips.appendChild(chip("节点", TRACE.nodes.length));
   chips.appendChild(chip("边", TRACE.edges.length));
+  const gm = graphMetrics(TRACE.nodes || [], TRACE.edges || []);
+  chips.appendChild(chip("最大深度", gm.maxDepth));
+  chips.appendChild(chip("分支因子", gm.branchFactor));
+  chips.appendChild(chip("关键路径", gm.critical));
+  chips.appendChild(chip("错误节点", gm.errors));
+  chips.appendChild(chip("推理文字", gm.chars));
 
   btnToggle.addEventListener("click", () => {
     collapseReasoning = !collapseReasoning;
@@ -702,6 +843,25 @@ function initToolbar() {
   });
   document.getElementById("btnReset").addEventListener("click", fitView);
   document.getElementById("detailClose").addEventListener("click", clearSelection);
+
+  // theme toggle
+  const themeBtn = document.getElementById("btnToggleTheme");
+  const saved = localStorage.getItem("fractal-theme");
+  if (saved === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+    KIND_COLORS = { ...KIND_COLORS_LIGHT };
+  }
+  themeBtn.addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const next = cur === "light" ? "" : "light";
+    if (next) document.documentElement.setAttribute("data-theme", next);
+    else document.documentElement.removeAttribute("data-theme");
+    localStorage.setItem("fractal-theme", next || "dark");
+    KIND_COLORS = next === "light" ? { ...KIND_COLORS_LIGHT } : { ...KIND_COLORS_DARK };
+    render();
+    fitView();
+    clearSelection();
+  });
 }
 
 window.addEventListener("resize", fitView);
@@ -716,18 +876,24 @@ clearSelection();
 """
 
 
-def render_trace_html(trace: dict, title: str = "分形Agent · 推理轨迹") -> str:
+def render_trace_html(trace: dict, title: str = "分形Agent · 推理轨迹",
+                      auto_refresh: bool = False,
+                      rethink_url: str | None = None) -> str:
     """把 trace 图模型（含递归 children）渲染成单个自包含 HTML 字符串。"""
     trace_json = json.dumps(trace, ensure_ascii=False)
     # 防止内容里的 "</script>" 提前终结脚本块
     trace_json = trace_json.replace("</", "<\\/")
     title_html = _html.escape(title or "分形Agent · 推理轨迹", quote=True)
     title_js = json.dumps(title or "分形Agent · 推理轨迹", ensure_ascii=False)
+    refresh_meta = '<meta http-equiv="refresh" content="2">' if auto_refresh else ""
+    rethink_url_js = json.dumps(rethink_url or "", ensure_ascii=False)
     return (
         _TEMPLATE
         .replace("__TRACE_JSON__", trace_json)
         .replace("__TITLE_HTML__", title_html)
         .replace("__TITLE_JS__", title_js)
+        .replace("__REFRESH_META__", refresh_meta)
+        .replace("__RETHINK_URL_JS__", rethink_url_js)
     )
 
 
